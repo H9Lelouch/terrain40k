@@ -12,7 +12,7 @@ from ..utils.mesh import (
     boolean_union,
     cleanup_mesh,
 )
-from .gothic_details import create_pillar
+from .gothic_details import create_pillar, create_fluted_column, create_skull_relief
 from .connectors import add_connectors
 from .damage import apply_damage
 
@@ -89,12 +89,23 @@ def generate_pillar_cluster(params):
         if is_broken:
             ph *= rng.uniform(0.3, 0.7)
 
-        p = create_pillar(
-            radius=pillar_r,
-            height=ph,
-            segments=max(8, 8 + gothic * 2),
-            name=f"Pillar_{i}"
-        )
+        # Use fluted columns at gothic level 2+ for authentic look
+        if gothic >= 2 and not is_broken:
+            p = create_fluted_column(
+                radius=pillar_r,
+                height=ph,
+                flute_count=max(6, gothic * 3),
+                flute_depth=0.5,
+                segments=max(12, 8 + gothic * 2),
+                name=f"Pillar_{i}"
+            )
+        else:
+            p = create_pillar(
+                radius=pillar_r,
+                height=ph,
+                segments=max(8, 8 + gothic * 2),
+                name=f"Pillar_{i}"
+            )
         p.location = Vector((px, py, base_h))
         bpy.context.view_layer.objects.active = p
         p.select_set(True)
@@ -107,6 +118,18 @@ def generate_pillar_cluster(params):
         boolean_union(result, p, remove_other=True)
 
     result.name = "Pillar_Cluster"
+
+    # --- Skull decorations on base (gothic 3) ---
+    if gothic >= 3 and len(positions_used) >= 2:
+        # Place skull between first two pillars
+        sx = (positions_used[0][0] + positions_used[1][0]) / 2
+        sy = (positions_used[0][1] + positions_used[1][1]) / 2
+        skull = create_skull_relief(width=6.0, height=7.0, depth=1.0, name="_pil_skull")
+        skull.location = Vector((sx, sy, base_h + 0.5))
+        bpy.context.view_layer.objects.active = skull
+        skull.select_set(True)
+        bpy.ops.object.transform_apply(location=True)
+        boolean_union(result, skull, remove_other=True)
 
     # --- Scatter debris around pillars ---
     if detail >= 1 and damage_val > 0.1:
