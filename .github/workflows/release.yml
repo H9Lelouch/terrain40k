@@ -1,0 +1,103 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Extract version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Verify bl_info version matches tag
+        run: |
+          TAG_VERSION="${{ steps.version.outputs.VERSION }}"
+          # Extract version tuple from bl_info
+          BL_VERSION=$(python3 -c "
+          import ast, sys
+          with open('addon/terrain40k/__init__.py') as f:
+              tree = ast.parse(f.read())
+          for node in ast.walk(tree):
+              if isinstance(node, ast.Dict):
+                  for key, val in zip(node.keys, node.values):
+                      if isinstance(key, ast.Constant) and key.value == 'version':
+                          if isinstance(val, ast.Tuple):
+                              nums = [e.value for e in val.elts]
+                              print('.'.join(map(str, nums)))
+                              sys.exit(0)
+          sys.exit(1)
+          ")
+          echo "Tag version: $TAG_VERSION"
+          echo "bl_info version: $BL_VERSION"
+          if [ "$TAG_VERSION" != "$BL_VERSION" ]; then
+            echo "ERROR: Tag v$TAG_VERSION does not match bl_info version $BL_VERSION"
+            exit 1
+          fi
+
+      - name: Check PROJECT_STATE.md is current
+        run: |
+          python3 tools/update_project_state.py --check-only || {
+            echo "WARNING: PROJECT_STATE.md may be outdated. Run tools/update_project_state.py"
+          }
+
+      - name: Build addon zip
+        run: |
+          cd addon
+          zip -r ../terrain40k-v${{ steps.version.outputs.VERSION }}.zip terrain40k/
+
+      - name: Extract changelog for this version
+        id: changelog
+        run: |
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          # Extract section for this version from CHANGELOG.md
+          NOTES=$(python3 -c "
+          import re, sys
+          with open('CHANGELOG.md') as f:
+              text = f.read()
+          pattern = r'## \[?${VERSION}\]?.*?\n(.*?)(?=\n## |\Z)'
+          pattern = r'## \[?v?${VERSION}\]?.*?\n(.*?)(?=\n## |\Z)'
+          # Simple extraction: find lines between version headers
+          lines = text.split('\n')
+          capture = False
+          result = []
+          for line in lines:
+              if line.startswith('## ') and '${VERSION}' in line:
+                  capture = True
+                  continue
+              elif line.startswith('## ') and capture:
+                  break
+              elif capture:
+                  result.append(line)
+          print('\n'.join(result).strip())
+          " 2>/dev/null || echo "See CHANGELOG.md for details.")
+          echo "NOTES<<EOF" >> $GITHUB_OUTPUT
+          echo "$NOTES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "terrain40k v${{ steps.version.outputs.VERSION }}"
+          body: |
+            ## terrain40k v${{ steps.version.outputs.VERSION }}
+
+            ${{ steps.changelog.outputs.NOTES }}
+
+            ### Installation
+            1. Download `terrain40k-v${{ steps.version.outputs.VERSION }}.zip`
+            2. In Blender: Edit → Preferences → Add-ons → Install
+            3. Select the zip file and enable the addon
+            4. Open sidebar (N) → "40K Terrain" tab
+          files: terrain40k-v${{ steps.version.outputs.VERSION }}.zip
+          draft: false
+          prerelease: false

@@ -1,0 +1,61 @@
+name: PR Check
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-and-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dev dependencies
+        run: pip install ruff
+
+      - name: Lint with ruff
+        run: ruff check addon/terrain40k/ tools/
+
+      - name: Check formatting with ruff
+        run: ruff format --check addon/terrain40k/ tools/
+
+      - name: Validate addon structure
+        run: |
+          python3 -c "
+          import ast
+          # Check __init__.py parses and has bl_info
+          with open('addon/terrain40k/__init__.py') as f:
+              tree = ast.parse(f.read())
+          found = False
+          for node in ast.walk(tree):
+              if isinstance(node, ast.Assign):
+                  for target in node.targets:
+                      if isinstance(target, ast.Name) and target.id == 'bl_info':
+                          found = True
+          assert found, 'bl_info not found in __init__.py'
+          print('Addon structure OK')
+          "
+
+      - name: Check Python syntax of all addon files
+        run: |
+          python3 -m py_compile addon/terrain40k/__init__.py
+          python3 -m py_compile addon/terrain40k/properties.py
+          python3 -m py_compile addon/terrain40k/operators.py
+          python3 -m py_compile addon/terrain40k/ui.py
+          echo "All files compile OK"
+
+      - name: Verify project state freshness
+        run: |
+          python3 tools/update_project_state.py --check-only || echo "::warning::PROJECT_STATE.md may need updating"
+
+      - name: Build test zip
+        run: |
+          cd addon
+          zip -r ../terrain40k-test.zip terrain40k/
+          ls -la ../terrain40k-test.zip
