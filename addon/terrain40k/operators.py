@@ -46,6 +46,12 @@ class TERRAIN40K_OT_generate(bpy.types.Operator):
             self.report({'ERROR'}, f"Unknown module type: {props.module_type}")
             return {'CANCELLED'}
 
+        # Set scene to millimeters if not already
+        scene = context.scene
+        if scene.unit_settings.length_unit != 'MILLIMETERS':
+            scene.unit_settings.length_unit = 'MILLIMETERS'
+            scene.unit_settings.scale_length = 0.001
+
         try:
             results = gen_func(params)
             count = len(results) if results else 0
@@ -56,6 +62,25 @@ class TERRAIN40K_OT_generate(bpy.types.Operator):
             import traceback
             traceback.print_exc()
             return {'CANCELLED'}
+
+        # Select generated objects and zoom to them
+        bpy.ops.object.select_all(action='DESELECT')
+        if results:
+            for obj in results:
+                obj.select_set(True)
+            context.view_layer.objects.active = results[0]
+            # Zoom viewport to selection
+            for area in context.screen.areas:
+                if area.type == 'VIEW_3D':
+                    for region in area.regions:
+                        if region.type == 'WINDOW':
+                            override = context.copy()
+                            override['area'] = area
+                            override['region'] = region
+                            with context.temp_override(**override):
+                                bpy.ops.view3d.view_selected()
+                            break
+                    break
 
         return {'FINISHED'}
 
