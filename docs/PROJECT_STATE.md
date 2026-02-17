@@ -61,10 +61,7 @@
 
 ## Known Issues / Bugs
 
-1. Boolean operations can occasionally fail on complex geometry with EXACT solver — fallback to FAST is implemented but may leave non-manifold edges.
-2. Multi-floor (floor_count > 1) is not yet implemented — parameter exists but is unused.
-3. Very high damage_intensity (>0.9) combined with many windows can create thin-wall violations.
-4. Aquila relief is basic geometric placeholder, not a detailed eagle.
+No open bug issues.
 
 ## Next Tasks (Roadmap)
 
