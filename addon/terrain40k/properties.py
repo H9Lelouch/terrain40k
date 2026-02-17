@@ -24,27 +24,30 @@ class Terrain40KProperties(bpy.types.PropertyGroup):
         description="Type of terrain module to generate",
     )
     width: FloatProperty(
-        name="Width",
+        name="Width (mm)",
         default=100.0,
         min=20.0, max=500.0,
         step=100,
-        unit='LENGTH',
+        precision=1,
+        subtype='NONE',
         description="Module width in mm",
     )
     height: FloatProperty(
-        name="Height",
+        name="Height (mm)",
         default=80.0,
         min=15.0, max=300.0,
         step=100,
-        unit='LENGTH',
+        precision=1,
+        subtype='NONE',
         description="Module height in mm",
     )
     depth: FloatProperty(
-        name="Depth",
+        name="Depth (mm)",
         default=80.0,
         min=15.0, max=300.0,
         step=100,
-        unit='LENGTH',
+        precision=1,
+        subtype='NONE',
         description="Module depth (for corner/pillar cluster) in mm",
     )
     wall_thickness: FloatProperty(
