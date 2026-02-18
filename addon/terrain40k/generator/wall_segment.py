@@ -1,12 +1,18 @@
 """
 Wall Segment generator for Warhammer 40K imperial ruins.
-Based on Sector Imperialis architecture:
-- Gothic pointed arch windows with raised frames
-- Pilaster strips between windows
-- Skull motifs above windows / on wall face
-- Stone block mortar pattern
-- Flying buttresses with stepped bases
-- Battle damage (crumbling, bullet holes, chunks)
+Based on Sector Imperialis architecture (GW standard: 127 mm / 5").
+
+Wall structure from Z=0 (ground):
+    base_h  (~18 %)  solid foundation band / plinth zone
+    win_h   (~55 %)  lancet arch window zone
+    top_h   (~15 %)  solid top band (cornice / battlements later)
+
+Key style rules:
+    - Lancet ratio 1:2.8–1:3.5 (width:height) — very narrow
+    - Buttresses at both wall ends, every 80 mm at gothic 2+
+    - Pilasters between windows at gothic 1+
+    - Skulls above windows at gothic 2+
+    - Stone mortar courses across full height at detail 1+
 """
 
 import bpy
@@ -39,17 +45,17 @@ def generate_wall_segment(params):
     """
     Generate an Imperial Gothic wall segment with authentic details.
 
-    Detail level controls:
+    Detail level:
         0: Plain wall + windows only
-        1: + buttresses + pilasters
-        2: + stone block lines + window frames + skulls
-        3: + aquila relief + rivets + full decoration
+        1: Plinth + buttresses + pilasters + mortar lines
+        2: + window frames + sills + skulls
+        3: + aquila relief + rivets
 
-    Gothic style controls:
+    Gothic style:
         0: Rectangular windows, no gothic elements
-        1: Pointed arch windows + simple buttresses
-        2: + window sills/frames + pilasters between windows
-        3: + skulls above windows + aquila + full gothic
+        1: Pointed arch windows + buttresses
+        2: + pilasters + window sills/frames
+        3: + skulls + aquila
 
     Returns: list of objects (may be multiple if split)
     """
@@ -67,59 +73,61 @@ def generate_wall_segment(params):
 
     rng = random.Random(seed)
 
-    # --- Main wall slab ---
-    wall = create_box_object(w, h, t, location=(0, 0, h / 2), name="Wall_Segment")
+    # ── Main wall slab ───────────────────────────────────────────────────────
+    # Sits on ground: Z = 0 → h
+    wall = create_box_object(w, h, t, location=(0, 0, 0), name="Wall_Segment")
 
-    # --- Base plinth (foundation strip at bottom) ---
+    # ── Base plinth (foundation strip) ───────────────────────────────────────
+    # Slightly wider and deeper than wall, sits at Z = 0 → plinth_h
     if detail >= 1:
-        plinth_h = max(h * 0.05, 3.0)
+        plinth_h = max(h * 0.06, 4.0)
         plinth = create_box_object(
-            w + 2.0, plinth_h, t + 2.0,
-            location=(0, 0, plinth_h / 2), name="_wall_plinth"
+            w + 4.0, plinth_h, t + 4.0,
+            location=(0, 0, 0), name="_wall_plinth"
         )
         boolean_union(wall, plinth)
 
-    # --- Windows ---
+    # ── Windows ─────────────────────────────────────────────────────────────
+    # Returns list of (cx, win_bottom, win_h) tuples
     window_positions = []
     if win_count > 0:
         window_positions = _add_windows(wall, w, h, t, win_count, gothic, detail, rng)
 
-    # --- Pilasters between windows (now from gothic 1+) ---
+    # ── Pilasters between windows ────────────────────────────────────────────
     if gothic >= 1 and len(window_positions) >= 2:
-        _add_pilasters(wall, w, h, t, window_positions, rng)
+        _add_pilasters(wall, h, t, window_positions)
 
-    # --- Buttresses ---
+    # ── Buttresses at wall ends (and optionally center) ──────────────────────
     if gothic >= 1:
-        _add_buttresses(wall, w, h, t, gothic, rng)
+        _add_buttresses(wall, w, h, t, gothic)
 
-    # --- Skulls above windows (now from gothic 2+) ---
-    if gothic >= 2 and window_positions:
-        _add_skulls_above_windows(wall, window_positions, h, t, rng)
+    # ── Skulls above windows ─────────────────────────────────────────────────
+    if gothic >= 2 and detail >= 2 and window_positions:
+        _add_skulls_above_windows(wall, window_positions, h, t)
 
-    # --- Aquila on wall center (now from gothic 3 + detail 2) ---
+    # ── Aquila on wall center ────────────────────────────────────────────────
     if gothic >= 3 and detail >= 2 and w >= 60:
-        _add_aquila(wall, w, h, t, rng)
+        _add_aquila(wall, w, h, t)
 
-    # --- Stone block mortar lines (now from detail 1+) ---
+    # ── Horizontal mortar / stone-course lines ───────────────────────────────
     if detail >= 1:
-        block_h = max(6.0, h / 10.0)
-        line_w = 0.6 if detail >= 2 else 0.7
+        course_h = max(7.0, h / 9.0)
         add_panel_lines(wall, direction='HORIZONTAL',
-                        count=max(3, int(h / block_h)),
-                        line_width=line_w, line_depth=0.4)
+                        count=max(3, int(h / course_h)),
+                        line_width=0.6, line_depth=0.4)
 
-    # --- Rivets at detail level 3 ---
+    # ── Rivets ───────────────────────────────────────────────────────────────
     if detail >= 3 and t >= 2.5:
-        _add_wall_rivets(wall, w, h, t, rng)
+        _add_wall_rivets(wall, w, h, t)
 
-    # --- Bevel ---
+    # ── Bevel ────────────────────────────────────────────────────────────────
     if bevel_w > 0:
         _apply_bevel(wall, bevel_w)
 
-    # --- Damage ---
+    # ── Damage ───────────────────────────────────────────────────────────────
     apply_damage(wall, params.get('damage_state', 'CLEAN'), damage, seed)
 
-    # --- Connectors ---
+    # ── Connectors ───────────────────────────────────────────────────────────
     add_connectors(
         wall, connector,
         pin_tolerance=params.get('pin_tolerance', 0.25),
@@ -127,10 +135,10 @@ def generate_wall_segment(params):
         magnet_height=params.get('magnet_height', 2.0),
     )
 
-    # --- Final cleanup ---
+    # ── Cleanup ──────────────────────────────────────────────────────────────
     cleanup_mesh(wall)
 
-    # --- Split for print ---
+    # ── Split for print ──────────────────────────────────────────────────────
     if split_mode == 'AUTO' and should_split(wall):
         parts = split_for_print(wall)
         for i, p in enumerate(parts):
@@ -141,24 +149,47 @@ def generate_wall_segment(params):
     return [wall]
 
 
-def _add_windows(wall, w, h, t, count, gothic_level, detail_level, rng):
-    """Cut gothic arch windows into the wall. Returns list of (x, z) positions."""
-    # Window sizing — tall and narrow for authentic gothic look
-    win_w = min(w / (count + 1) * 0.45, 22.0)
-    win_h = min(h * 0.55, 45.0)
-    # Gothic windows are taller than wide (aspect ratio ~1:2.5)
-    if gothic_level > 0:
-        win_h = min(h * 0.6, 50.0)
-        win_w = min(win_w, win_h * 0.4)  # narrower for lancet look
+# ── Window zone ────────────────────────────────────────────────────────────
 
+def _wall_zones(h):
+    """
+    Return (base_h, win_h, top_h) for a wall of height h.
+    All three sum to h; win_h capped at 60 mm for very tall walls.
+    """
+    base_h = max(h * 0.18, 12.0)
+    top_h  = max(h * 0.15, 10.0)
+    avail  = h - base_h - top_h
+    win_h  = max(min(avail, 60.0), 15.0)
+    # If win_h was capped, spread the surplus to top zone
+    surplus = avail - win_h
+    top_h += surplus
+    return base_h, win_h, top_h
+
+
+def _add_windows(wall, w, h, t, count, gothic_level, detail_level, rng):
+    """
+    Cut lancet arch windows into the wall.
+    Returns list of (cx, win_bottom, win_h) tuples.
+
+    Window zone sits between base_h (bottom) and base_h+win_h (top),
+    leaving a solid top band of top_h mm.
+    """
+    base_h, win_h, top_h = _wall_zones(h)
+    win_bottom = base_h  # window arch starts here (Z)
+
+    # Spacing and width
     spacing = w / (count + 1)
+    # Lancet: width 30–36 % of height → classic narrow proportion
+    win_w = min(spacing * 0.58, win_h * 0.36, 20.0)
+    win_w = max(win_w, 5.0)  # minimum printable width
+
     start_x = -w / 2 + spacing
     positions = []
 
     for i in range(count):
         cx = start_x + i * spacing
-        cz = h * 0.48  # slightly above center for imposing look
 
+        # ── Arch cutter — profile begins at Z=0, placed at win_bottom ──────
         if gothic_level > 0:
             cutter = create_gothic_arch_cutter(
                 win_w, win_h, t + 2.0,
@@ -166,43 +197,47 @@ def _add_windows(wall, w, h, t, count, gothic_level, detail_level, rng):
                 name=f"_win_cut_{i}"
             )
         else:
+            # Flat-topped rectangular window, also starting at Z=0
             cutter = create_box_object(
                 win_w, win_h, t + 2.0,
-                location=(0, 0, win_h / 2),
+                location=(0, 0, 0),
                 name=f"_win_cut_{i}"
             )
 
         cutter.location.x = cx
         cutter.location.y = 0
-        cutter.location.z = cz
+        cutter.location.z = win_bottom
         bpy.context.view_layer.objects.active = cutter
         cutter.select_set(True)
         bpy.ops.object.transform_apply(location=True)
         boolean_difference(wall, cutter)
-        positions.append((cx, cz))
+        positions.append((cx, win_bottom, win_h))
 
-        # Raised arch frame around window (gothic 1+ detail 1+)
+        # ── Raised arch frame on front face ──────────────────────────────
         if gothic_level >= 1 and detail_level >= 1:
             frame = create_arch_frame(
-                win_w, win_h, depth=1.5,
-                frame_thickness=1.5,
+                win_w, win_h,
+                depth=1.5, frame_thickness=1.5,
                 segments=max(8, gothic_level * 4),
                 name=f"_win_frame_{i}"
             )
-            frame.location = Vector((cx, -(t / 2 + 0.3), cz))
+            # Frame profile also starts at Z=0 → position at win_bottom
+            frame.location = Vector((cx, -(t / 2 + 0.3), win_bottom))
             bpy.context.view_layer.objects.active = frame
             frame.select_set(True)
             bpy.ops.object.transform_apply(location=True)
             boolean_union(wall, frame)
 
-        # Window sill / ledge
+        # ── Window sill — ledge below the arch opening ───────────────────
         if gothic_level >= 1 and detail_level >= 1:
-            sill_w = win_w + 4.0
-            sill_h = 2.0
-            sill_d = t + 2.5
+            sill_w = win_w + 6.0
+            sill_h = 3.0
+            sill_d = t + 6.0   # protrudes visibly from wall face
+            # Sill top flush with window bottom; front-biased protrusion
+            sill_cy = -(t / 2 + sill_d / 2 - t / 2)   # front-face biased
             sill = create_box_object(
                 sill_w, sill_h, sill_d,
-                location=(cx, 0, cz - win_h / 2 - sill_h / 2 + 0.5),
+                location=(cx, sill_cy, win_bottom - sill_h),
                 name=f"_win_sill_{i}"
             )
             boolean_union(wall, sill)
@@ -210,15 +245,14 @@ def _add_windows(wall, w, h, t, count, gothic_level, detail_level, rng):
     return positions
 
 
-def _add_pilasters(wall, w, h, t, window_positions, rng):
-    """Add pilaster strips between windows for Sector Imperialis look."""
-    pil_w = max(3.0, t * 0.8)
-    pil_h = h * 0.85
-    pil_d = max(1.5, t * 0.5)
+# ── Pilasters ──────────────────────────────────────────────────────────────
 
-    # Place pilasters between each pair of windows
-    if len(window_positions) < 2:
-        return
+def _add_pilasters(wall, h, t, window_positions):
+    """Pilaster strips between window pairs — typical Sector Imperialis look."""
+    pil_w = max(3.5, t * 0.9)
+    pil_h = h * 0.88          # nearly full wall height
+    pil_d = max(1.8, t * 0.55)
+
     for i in range(len(window_positions) - 1):
         x1 = window_positions[i][0]
         x2 = window_positions[i + 1][0]
@@ -231,24 +265,26 @@ def _add_pilasters(wall, w, h, t, window_positions, rng):
         boolean_union(wall, pilaster)
 
 
-def _add_buttresses(wall, w, h, t, gothic_level, rng):
-    """Add buttresses to wall edges and optionally center."""
-    butt_w = max(t * 1.5, 5.0)
-    butt_h = h * 0.88
-    butt_d = max(t * 2.0, 8.0)
+# ── Buttresses ─────────────────────────────────────────────────────────────
+
+def _add_buttresses(wall, w, h, t, gothic_level):
+    """
+    Stepped buttresses at wall ends, with additional ones for wider walls.
+    Buttresses start at Z=0 and taper upward — Sector Imperialis standard.
+    """
+    butt_w = max(t * 1.8, 6.0)
+    butt_h = h * 0.90
+    butt_d = max(t * 2.5, 10.0)
+
     positions_x = [-w / 2 + butt_w / 2, w / 2 - butt_w / 2]
     if gothic_level >= 2 and w > 80:
         positions_x.append(0.0)
-    if gothic_level >= 3 and w > 120:
+    if gothic_level >= 3 and w > 130:
         positions_x.append(-w / 4)
         positions_x.append(w / 4)
 
     for px in positions_x:
-        butt = create_buttress(
-            butt_w, butt_h, butt_d,
-            taper=0.55,
-            name="_buttress"
-        )
+        butt = create_buttress(butt_w, butt_h, butt_d, taper=0.55, name="_buttress")
         butt.location = Vector((px, -(t / 2 + butt_d / 2 - 1.0), 0))
         bpy.context.view_layer.objects.active = butt
         butt.select_set(True)
@@ -256,49 +292,65 @@ def _add_buttresses(wall, w, h, t, gothic_level, rng):
         boolean_union(wall, butt)
 
 
-def _add_skulls_above_windows(wall, window_positions, h, t, rng):
-    """Place skull reliefs centered above each window."""
-    skull_w = max(6.0, min(10.0, h * 0.08))
+# ── Skull reliefs ──────────────────────────────────────────────────────────
+
+def _add_skulls_above_windows(wall, window_positions, h, t):
+    """
+    Skull reliefs in the top band, centered above each window.
+    Placed in the solid zone between window top and wall top.
+    """
+    skull_w = max(6.0, min(10.0, h * 0.09))
     skull_h = skull_w * 1.15
-    for i, (wx, wz) in enumerate(window_positions):
+
+    for wx, win_bottom, win_h in window_positions:
+        win_top = win_bottom + win_h
+        top_zone = h - win_top
+        if top_zone < skull_h + 2.0:
+            continue  # not enough space
+        # Center skull in the top band
+        skull_z = win_top + (top_zone - skull_h) * 0.40
+
         skull = create_skull_relief(
             width=skull_w, height=skull_h, depth=1.2,
-            name=f"_skull_{i}"
+            name="_skull"
         )
-        # Position above window
-        skull.location = Vector((wx, -(t / 2 + 0.3), wz + 25.0))
+        skull.location = Vector((wx, -(t / 2 + 0.3), skull_z))
         bpy.context.view_layer.objects.active = skull
         skull.select_set(True)
         bpy.ops.object.transform_apply(location=True)
         boolean_union(wall, skull)
 
 
-def _add_aquila(wall, w, h, t, rng):
-    """Place an Imperial Aquila relief on the wall center."""
-    aq_w = min(w * 0.35, 40.0)
+# ── Aquila ─────────────────────────────────────────────────────────────────
+
+def _add_aquila(wall, w, h, t):
+    """Imperial Aquila relief centered in the top band."""
+    aq_w = min(w * 0.30, 35.0)
     aq_h = aq_w * 0.5
     aquila = create_aquila_relief(aq_w, aq_h, depth=1.2, name="_aquila")
-    # Place in upper-center area of wall
-    aquila.location = Vector((0, -(t / 2 + 0.3), h * 0.78))
+    # Top-center of wall, in upper zone
+    aquila.location = Vector((0, -(t / 2 + 0.3), h * 0.80))
     bpy.context.view_layer.objects.active = aquila
     aquila.select_set(True)
     bpy.ops.object.transform_apply(location=True)
     boolean_union(wall, aquila)
 
 
-def _add_wall_rivets(wall, w, h, t, rng):
-    """Add rows of rivets along the wall for industrial gothic detail."""
-    rivet_positions = []
-    # Rivets along bottom edge
+# ── Rivets ─────────────────────────────────────────────────────────────────
+
+def _add_wall_rivets(wall, w, h, t):
+    """Rows of rivets at base and top for industrial gothic flavour."""
     y_pos = -(t / 2) - 0.1
+    rivet_positions = []
     for rx in range(-int(w / 2) + 8, int(w / 2) - 5, 12):
-        rivet_positions.append(Vector((rx, y_pos, 5.0)))
-        rivet_positions.append(Vector((rx, y_pos, h - 5.0)))
+        rivet_positions.append(Vector((rx, y_pos, 6.0)))
+        rivet_positions.append(Vector((rx, y_pos, h - 6.0)))
     add_rivets(wall, rivet_positions, rivet_radius=0.8, rivet_depth=0.8)
 
 
+# ── Bevel ──────────────────────────────────────────────────────────────────
+
 def _apply_bevel(obj, width):
-    """Apply a bevel modifier if width > 0."""
     if width <= 0:
         return
     bpy.context.view_layer.objects.active = obj
