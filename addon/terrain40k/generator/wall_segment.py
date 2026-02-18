@@ -117,7 +117,7 @@ def generate_wall_segment(params):
         _apply_bevel(wall, bevel_w)
 
     # --- Damage ---
-    apply_damage(wall, damage, seed)
+    apply_damage(wall, params.get('damage_state', 'CLEAN'), damage, seed)
 
     # --- Connectors ---
     add_connectors(

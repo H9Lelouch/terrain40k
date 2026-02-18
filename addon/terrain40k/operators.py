@@ -25,6 +25,7 @@ class TERRAIN40K_OT_generate(bpy.types.Operator):
             'window_density': props.window_density,
             'detail_level': props.detail_level,
             'gothic_style': props.gothic_style,
+            'damage_state': props.damage_state,
             'damage_intensity': props.damage_intensity,
             'seed': props.random_seed,
             'connector_type': props.connector_type,

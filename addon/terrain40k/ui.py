@@ -36,7 +36,9 @@ class TERRAIN40K_PT_main_panel(bpy.types.Panel):
         box.prop(props, "window_density")
         box.prop(props, "detail_level")
         box.prop(props, "gothic_style")
-        box.prop(props, "damage_intensity", slider=True)
+        box.prop(props, "damage_state")
+        if props.damage_state != 'CLEAN':
+            box.prop(props, "damage_intensity", slider=True)
         box.prop(props, "bevel_width")
 
         # Seed

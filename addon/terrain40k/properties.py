@@ -82,6 +82,17 @@ class Terrain40KProperties(bpy.types.PropertyGroup):
         min=0, max=3,
         description="0=plain, 1=basic arches, 2=buttresses+sills, 3=full gothic",
     )
+    damage_state: EnumProperty(
+        name="Damage State",
+        items=[
+            ('CLEAN',   "Clean",   "Pristine – no structural damage"),
+            ('DAMAGED', "Damaged", "Cracks, chips, bullet holes, mini-breaks"),
+            ('RUINED',  "Ruined",  "Large holes, breakouts, missing segments"),
+            ('HALF',    "Half",    "30–60 % gone – collapse break"),
+        ],
+        default='CLEAN',
+        description="Damage level preset",
+    )
     damage_intensity: FloatProperty(
         name="Damage Intensity",
         default=0.3,
