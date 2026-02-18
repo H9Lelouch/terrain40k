@@ -84,31 +84,29 @@ def generate_wall_segment(params):
     if win_count > 0:
         window_positions = _add_windows(wall, w, h, t, win_count, gothic, detail, rng)
 
-    # --- Pilasters between windows ---
-    if gothic >= 2 and len(window_positions) >= 2:
+    # --- Pilasters between windows (now from gothic 1+) ---
+    if gothic >= 1 and len(window_positions) >= 2:
         _add_pilasters(wall, w, h, t, window_positions, rng)
 
     # --- Buttresses ---
     if gothic >= 1:
         _add_buttresses(wall, w, h, t, gothic, rng)
 
-    # --- Skulls above windows ---
-    if gothic >= 3 and window_positions:
+    # --- Skulls above windows (now from gothic 2+) ---
+    if gothic >= 2 and window_positions:
         _add_skulls_above_windows(wall, window_positions, h, t, rng)
 
-    # --- Aquila on wall center (high detail + high gothic) ---
-    if gothic >= 3 and detail >= 3 and w >= 60:
+    # --- Aquila on wall center (now from gothic 3 + detail 2) ---
+    if gothic >= 3 and detail >= 2 and w >= 60:
         _add_aquila(wall, w, h, t, rng)
 
-    # --- Stone block mortar lines ---
-    if detail >= 2:
+    # --- Stone block mortar lines (now from detail 1+) ---
+    if detail >= 1:
         block_h = max(6.0, h / 10.0)
-        add_stone_block_lines(wall, block_height=block_h, block_width=block_h * 1.5,
-                              line_width=0.6, line_depth=0.4)
-    elif detail >= 1:
-        # Simpler panel lines
-        add_panel_lines(wall, direction='HORIZONTAL', count=max(2, int(h / 25)),
-                        line_width=0.8, line_depth=0.5)
+        line_w = 0.6 if detail >= 2 else 0.7
+        add_panel_lines(wall, direction='HORIZONTAL',
+                        count=max(3, int(h / block_h)),
+                        line_width=line_w, line_depth=0.4)
 
     # --- Rivets at detail level 3 ---
     if detail >= 3 and t >= 2.5:
@@ -183,8 +181,8 @@ def _add_windows(wall, w, h, t, count, gothic_level, detail_level, rng):
         boolean_difference(wall, cutter)
         positions.append((cx, cz))
 
-        # Raised arch frame around window (gothic 2+)
-        if gothic_level >= 2 and detail_level >= 2:
+        # Raised arch frame around window (gothic 1+ detail 1+)
+        if gothic_level >= 1 and detail_level >= 1:
             frame = create_arch_frame(
                 win_w, win_h, depth=1.5,
                 frame_thickness=1.5,
