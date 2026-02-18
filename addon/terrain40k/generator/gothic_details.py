@@ -298,22 +298,22 @@ def create_pilaster(width, height, depth, name="Pilaster"):
     shaft_h = height - base_h - cap_h
 
     parts = []
-    # Base (wider)
+    # Base (wider) — Z = 0 → base_h
     base = create_box_object(
         width * 1.3, base_h, depth * 1.2,
-        location=(0, 0, base_h / 2), name="_pil_base"
+        location=(0, 0, 0), name="_pil_base"
     )
     parts.append(base)
-    # Shaft
+    # Shaft — Z = base_h → base_h + shaft_h
     shaft = create_box_object(
         width, shaft_h, depth,
-        location=(0, 0, base_h + shaft_h / 2), name="_pil_shaft"
+        location=(0, 0, base_h), name="_pil_shaft"
     )
     parts.append(shaft)
-    # Capital (wider, with slight overhang)
+    # Capital (wider) — Z = base_h + shaft_h → height
     cap = create_box_object(
         width * 1.4, cap_h, depth * 1.3,
-        location=(0, 0, base_h + shaft_h + cap_h / 2), name="_pil_cap"
+        location=(0, 0, base_h + shaft_h), name="_pil_cap"
     )
     parts.append(cap)
 
@@ -357,11 +357,11 @@ def create_buttress(width, height, depth, taper=0.65, name="Buttress"):
     bmesh.ops.recalc_face_normals(bm, faces=bm.faces[:])
     obj = create_object_from_bmesh(bm, name)
 
-    # Add stepped base plinth
+    # Add stepped base plinth — Z = 0 → plinth_h
     plinth_h = max(height * 0.06, 1.5)
     plinth = create_box_object(
         width * 1.3, plinth_h, depth * 1.3,
-        location=(0, 0, plinth_h / 2), name="_butt_plinth"
+        location=(0, 0, 0), name="_butt_plinth"
     )
     boolean_union(obj, plinth)
 
