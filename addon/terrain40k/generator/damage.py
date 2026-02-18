@@ -108,7 +108,7 @@ def _apply_damaged(obj, intensity, rng):
     if intensity > 0.25:
         n_cracks = max(1, round((intensity - 0.25) * 4))
         for i in range(n_cracks):
-            cw = rng.uniform(0.5, 0.9)
+            cw = rng.uniform(1.0, 1.5)
             ch = rng.uniform(sz.z * 0.15, sz.z * 0.50)
             cd = rng.uniform(sz.y * 0.5, sz.y + 2.0)
             cx = rng.uniform(mn.x + 5, mx.x - 5)

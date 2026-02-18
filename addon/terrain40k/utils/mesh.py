@@ -140,23 +140,28 @@ def boolean_operation(target, cutter, operation='DIFFERENCE', remove_cutter=True
     cutter.hide_set(True)
 
     try:
-        bpy.ops.object.modifier_apply(modifier=mod.name)
-    except RuntimeError:
-        # Fallback: try FAST solver if EXACT fails
-        if mod.name in [m.name for m in target.modifiers]:
-            target.modifiers.remove(mod)
-        mod2 = target.modifiers.new(name="Bool_FAST", type='BOOLEAN')
-        mod2.operation = operation
-        mod2.solver = 'FAST'
-        mod2.object = cutter
         try:
-            bpy.ops.object.modifier_apply(modifier=mod2.name)
+            bpy.ops.object.modifier_apply(modifier=mod.name)
         except RuntimeError:
-            if mod2.name in [m.name for m in target.modifiers]:
-                target.modifiers.remove(mod2)
-
-    if remove_cutter:
-        bpy.data.objects.remove(cutter, do_unlink=True)
+            # Fallback: try FAST solver if EXACT fails
+            if mod.name in [m.name for m in target.modifiers]:
+                target.modifiers.remove(mod)
+            mod2 = target.modifiers.new(name="Bool_FAST", type='BOOLEAN')
+            mod2.operation = operation
+            mod2.solver = 'FAST'
+            mod2.object = cutter
+            try:
+                bpy.ops.object.modifier_apply(modifier=mod2.name)
+            except RuntimeError:
+                if mod2.name in [m.name for m in target.modifiers]:
+                    target.modifiers.remove(mod2)
+    finally:
+        # Always remove cutter — even if a non-RuntimeError exception occurs
+        if remove_cutter:
+            try:
+                bpy.data.objects.remove(cutter, do_unlink=True)
+            except Exception:
+                pass
 
 
 def boolean_difference(target, cutter, remove_cutter=True):
