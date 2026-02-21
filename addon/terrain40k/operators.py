@@ -22,9 +22,11 @@ class TERRAIN40K_OT_generate(bpy.types.Operator):
             'depth': props.depth,
             'wall_thickness': props.wall_thickness,
             'floor_count': props.floor_count,
+            'wall_style': props.wall_style,
             'window_density': props.window_density,
             'detail_level': props.detail_level,
             'gothic_style': props.gothic_style,
+            'mortar_width': props.mortar_width,
             'damage_state': props.damage_state,
             'damage_intensity': props.damage_intensity,
             'seed': props.random_seed,
@@ -53,6 +55,12 @@ class TERRAIN40K_OT_generate(bpy.types.Operator):
             scene.unit_settings.length_unit = 'MILLIMETERS'
             scene.unit_settings.scale_length = 0.001
 
+        # Clear previously generated objects if requested
+        if props.auto_clear:
+            to_remove = [o for o in context.scene.objects if o.get('terrain40k')]
+            for o in to_remove:
+                bpy.data.objects.remove(o, do_unlink=True)
+
         try:
             results = gen_func(params)
             count = len(results) if results else 0
@@ -63,6 +71,11 @@ class TERRAIN40K_OT_generate(bpy.types.Operator):
             import traceback
             traceback.print_exc()
             return {'CANCELLED'}
+
+        # Tag generated objects so auto_clear can find them next time
+        if results:
+            for obj in results:
+                obj['terrain40k'] = True
 
         # Select generated objects and zoom to them
         bpy.ops.object.select_all(action='DESELECT')

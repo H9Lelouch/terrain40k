@@ -104,66 +104,75 @@ def create_arch_frame(width, height, depth, frame_thickness=1.5,
 
 # ── Skull Motif ────────────────────────────────────────────────────────────
 
-def create_skull_relief(width=6.0, height=7.0, depth=1.2, name="Skull"):
+def create_skull_relief(width=6.0, height=7.0, depth=1.5, name="Skull"):
     """
-    Create a simplified Imperial skull motif for wall decoration.
-    FDM-optimized: min ~6mm wide for recognizable detail.
-    Shape: rounded cranium top, angular jaw, hollow eye sockets.
+    Imperial skull motif for wall decoration.  FDM-optimized box-based geometry.
+
+    Coordinate convention (matches wall placement):
+        local Y = 0  →  back face (flush with / inside wall surface)
+        local Y < 0  →  protrudes toward viewer
+        Z from 0 (bottom) to height (top)
+        X from −width/2 to +width/2
+
+    Place with:  skull.location = Vector((cx, -(t/2 - overlap), skull_z))
+    where overlap ≥ 0.5 mm ensures a solid boolean union with the wall.
     """
     if width < 4.0:
-        # Too small for FDM detail, return simple bump
         return create_box_object(width, height * 0.8, depth,
-                                 location=(0, 0, 0), name=name)
+                                 location=(0, -depth / 2, 0), name=name)
 
-    skull_w = width
-    skull_h = height
-    # Cranium (upper 60%): use a half-cylinder approximation
-    cranium_r = skull_w / 2.0
-    cranium_h = skull_h * 0.6
-    cranium = create_cylinder_object(
-        cranium_r, depth, segments=12,
-        location=(0, 0, skull_h * 0.35), name="_cranium"
+    jaw_h     = height * 0.38
+    cranium_h = height * 0.62
+    jaw_w     = width  * 0.72
+    cut_depth = depth + 2.0   # eye/nose cutters span well past front face
+
+    # ── Cranium (upper portion, full width) ─────────────────────────────
+    # Y: loc_y ± depth/2  →  -depth/2 ± depth/2  =  [-depth, 0]   ✓
+    cranium = create_box_object(
+        width, cranium_h, depth,
+        location=(0, -depth / 2, jaw_h), name="_cranium"
     )
-    # Rotate to face outward (cylinder along Y becomes relief on wall)
-    cranium.rotation_euler.x = math.radians(90)
-    bpy.context.view_layer.objects.active = cranium
-    cranium.select_set(True)
-    bpy.ops.object.transform_apply(rotation=True)
 
-    # Jaw (lower 40%): tapered box
-    jaw_w = skull_w * 0.7
-    jaw_h = skull_h * 0.4
+    # ── Jaw (lower portion, narrower, slightly shallower) ────────────────
+    # Y: -depth*0.35 ± depth*0.35  =  [-0.7*depth, 0]               ✓
     jaw = create_box_object(
-        jaw_w, jaw_h, depth * 0.8,
-        location=(0, 0, -skull_h * 0.05), name="_jaw"
+        jaw_w, jaw_h, depth * 0.7,
+        location=(0, -depth * 0.35, 0), name="_jaw"
     )
     boolean_union(cranium, jaw)
 
-    # Eye sockets: two small cylinder cuts
-    eye_spacing = skull_w * 0.28
-    eye_r = skull_w * 0.12
-    eye_depth_val = depth + 1.0
+    # ── Eye sockets (rectangular — better at FDM scale) ──────────────────
+    eye_w = width  * 0.22
+    eye_h = height * 0.18
+    eye_x = width  * 0.26
+    eye_z = jaw_h  + cranium_h * 0.38
     for side in [-1, 1]:
-        eye = create_cylinder_object(
-            eye_r, eye_depth_val, segments=8,
-            location=(side * eye_spacing, 0, skull_h * 0.35), name="_eye"
+        eye = create_box_object(
+            eye_w, eye_h, cut_depth,
+            location=(side * eye_x, -depth / 2, eye_z), name="_eye"
         )
-        eye.rotation_euler.x = math.radians(90)
-        bpy.context.view_layer.objects.active = eye
-        eye.select_set(True)
-        bpy.ops.object.transform_apply(rotation=True)
         boolean_difference(cranium, eye)
 
-    # Nose cavity: small triangle-ish cut
+    # ── Nose cavity ───────────────────────────────────────────────────────
+    nose_w = width  * 0.15
+    nose_h = height * 0.13
+    nose_z = jaw_h  + cranium_h * 0.08
     nose = create_box_object(
-        skull_w * 0.15, skull_w * 0.18, eye_depth_val,
-        location=(0, 0, skull_h * 0.2), name="_nose"
+        nose_w, nose_h, cut_depth,
+        location=(0, -depth / 2, nose_z), name="_nose"
     )
-    nose.rotation_euler.z = math.radians(45)
-    bpy.context.view_layer.objects.active = nose
-    nose.select_set(True)
-    bpy.ops.object.transform_apply(rotation=True)
     boolean_difference(cranium, nose)
+
+    # ── Tooth gaps (only if skull wide enough for FDM) ───────────────────
+    if width >= 7.0:
+        tgw = width  * 0.11
+        tgh = jaw_h  * 0.38
+        for tx in (-width * 0.17, 0.0, width * 0.17):
+            tg = create_box_object(
+                tgw, tgh, cut_depth,
+                location=(tx, -depth * 0.35, 0), name="_tgap"
+            )
+            boolean_difference(cranium, tg)
 
     cranium.name = name
     return cranium
@@ -371,11 +380,24 @@ def create_buttress(width, height, depth, taper=0.65, name="Buttress"):
 # ── Stone Block Pattern ────────────────────────────────────────────────────
 
 def add_stone_block_lines(target_obj, block_height=8.0, block_width=12.0,
-                          line_width=0.6, line_depth=0.4):
+                          line_width=0.8, line_depth=0.5, front_face_y=None,
+                          boss_depth=0.0, texture_depth=0.0):
     """
     Cut a grid of mortar lines into a wall surface to simulate stone blocks.
     Alternating horizontal courses with staggered vertical joints.
-    Typical of Sector Imperialis wall surfaces.
+
+    front_face_y: world Y of the wall front face (e.g. –t/2).
+        When provided the cutters are placed exactly at the wall surface
+        regardless of protruding plinths/buttresses that skew the bounding box.
+        When None: falls back to the bounding-box front (legacy behaviour).
+
+    boss_depth: if > 0, each stone block gets a slight raised face (bossage).
+        Disabled (0.0) by default — boolean-union of many small boxes causes
+        interior voids in complex meshes.
+
+    texture_depth: if >= 0.25, two shallow horizontal scratches are cut into
+        each individual stone face.  All boolean differences — no void risk.
+        Gives a rough, hand-dressed stone appearance.  Recommended: 0.3 mm.
     """
     if target_obj is None:
         return
@@ -384,29 +406,116 @@ def add_stone_block_lines(target_obj, block_height=8.0, block_width=12.0,
     max_co = Vector(bb[6])
     size = max_co - min_co
 
-    # Horizontal mortar lines
-    z = min_co.z + block_height
+    # Y centre and total depth of each mortar-line cutter.
+    # The cutter must start 0.2 mm past the wall face (to guarantee intersection)
+    # and reach line_depth mm into the wall.
+    if front_face_y is not None:
+        cut_y     = front_face_y + line_depth / 2   # centre: half-way into groove
+        cut_depth = line_depth + 0.4                # 0.2 mm margin each side
+    else:
+        cut_y     = min_co.y - 0.01                 # legacy: bounding-box front
+        cut_depth = line_depth
+
+    # Horizontal mortar lines — course heights vary per row (authentic ashlar)
+    # Real hand-laid stone uses blocks of different heights; this cycle produces
+    # a naturalistic pattern without randomness (deterministic = reproducible).
+    _COURSE_CYCLE = [0.75, 1.0, 1.2, 0.88, 1.05, 0.82]
     row = 0
+    z   = min_co.z + block_height * _COURSE_CYCLE[0]
     while z < max_co.z - 2.0:
+        ch = block_height * _COURSE_CYCLE[row % len(_COURSE_CYCLE)]
         cutter = create_box_object(
-            size.x + 2, line_width, line_depth,
-            location=(min_co.x + size.x / 2, min_co.y - 0.01, z),
+            size.x + 2, line_width, cut_depth,
+            location=(min_co.x + size.x / 2, cut_y, z),
             name=f"_mortar_h_{row}"
         )
         boolean_difference(target_obj, cutter)
-        # Vertical joints (staggered every other row)
-        offset = (block_width / 2.0) if (row % 2 == 1) else 0.0
-        x = min_co.x + offset + block_width
-        while x < max_co.x - 2.0:
-            vcutter = create_box_object(
-                line_width, block_height - line_width, line_depth,
-                location=(x, min_co.y - 0.01, z - (block_height - line_width) / 2),
-                name=f"_mortar_v_{row}"
-            )
-            boolean_difference(target_obj, vcutter)
-            x += block_width
-        z += block_height
+        # Vertical joints sized to this course's actual block height
+        offset    = (block_width / 2.0) if (row % 2 == 1) else 0.0
+        x         = min_co.x + offset + block_width
+        bh_vert   = ch - line_width
+        if bh_vert >= 0.8:                           # FDM minimum
+            while x < max_co.x - 2.0:
+                vcutter = create_box_object(
+                    line_width, bh_vert, cut_depth,
+                    location=(x, cut_y, z - bh_vert / 2),
+                    name=f"_mortar_v_{row}"
+                )
+                boolean_difference(target_obj, vcutter)
+                x += block_width
+
+        # Stone face texture — two shallow horizontal scratches per stone block.
+        # Simulates hand-dressed / rough-cut stone: each block reads as individual
+        # geometry, not a flat grid cell.  All boolean differences → no void risk.
+        # Z positions of the two cuts vary by column (deterministic cycle) so no
+        # two adjacent stones look identical.
+        if texture_depth >= 0.25 and front_face_y is not None:
+            stone_bot = z - ch
+            face_z0   = stone_bot + line_width        # stone face bottom Z
+            face_zh   = ch - 2 * line_width           # stone face total height
+            if face_zh >= 1.5:
+                # Scratch width ~10 % of stone face, min 0.5 mm
+                t_w  = max(0.5, min(1.2, face_zh * 0.10))
+                t_cd = texture_depth + 0.4            # cut depth with margin
+                t_cy = front_face_y + texture_depth / 2  # centred in groove
+                x_mg = max(line_width * 0.5, 0.5)    # inset from stone X edges
+                # Fraction table — 5-entry cycle so neighbour columns differ
+                _FRACS = [(0.32, 0.66), (0.28, 0.70),
+                          (0.35, 0.63), (0.30, 0.68), (0.38, 0.72)]
+                col = 0
+                bx  = min_co.x + offset
+                while bx < max_co.x - 0.5:
+                    bx_right  = min(bx + block_width, max_co.x)
+                    stone_cx  = (bx + bx_right) / 2
+                    stone_sx  = (bx_right - bx) - 2 * x_mg
+                    if stone_sx >= 0.8:
+                        f1, f2 = _FRACS[col % len(_FRACS)]
+                        for frac in (f1, f2):
+                            t_z = face_z0 + face_zh * frac
+                            # Clamp so scratch stays inside stone face
+                            t_z = max(face_z0 + 0.3,
+                                      min(face_z0 + face_zh - t_w - 0.3, t_z))
+                            tcut = create_box_object(
+                                stone_sx, t_w, t_cd,
+                                location=(stone_cx, t_cy, t_z),
+                                name=f"_tex_{row}_{col}",
+                            )
+                            boolean_difference(target_obj, tcut)
+                    col += 1
+                    bx  += block_width
+
+        # Block face bossage — slight protrusion per stone face.
+        # Each block gets a raised rectangle (boss) on its front surface,
+        # making individual stones readable as real 3-D geometry.
+        # Y-formula: boss_cy = front_face_y - boss_depth/2 + overlap/2
+        #            boss is unioned, so back face is slightly inside the wall.
+        if boss_depth >= 0.3 and front_face_y is not None:
+            stone_bot = z - ch                       # bottom of this course
+            bz_start  = stone_bot + line_width       # above bottom mortar line
+            bz_h      = ch - 2 * line_width          # stone face height
+            bm        = max(line_width * 0.5, 0.3)   # inset from mortar joint
+            b_overlap = 0.15                         # mm inside wall surface
+            boss_cy   = front_face_y - boss_depth / 2 + b_overlap / 2
+            boss_yd   = boss_depth + b_overlap
+
+            if bz_h - 2 * bm >= 0.6:
+                bx = min_co.x + offset
+                while bx < max_co.x - 0.5:
+                    bx_right = min(bx + block_width, max_co.x)
+                    boss_w   = (bx_right - bx) - 2 * bm
+                    boss_h   = bz_h - 2 * bm
+                    if boss_w >= 0.6:
+                        boss_cx = (bx + bx_right) / 2
+                        boss = create_box_object(
+                            boss_w, boss_h, boss_yd,
+                            location=(boss_cx, boss_cy, bz_start + bm),
+                            name=f"_stone_boss_{row}"
+                        )
+                        boolean_union(target_obj, boss)
+                    bx += block_width
+
         row += 1
+        z += block_height * _COURSE_CYCLE[row % len(_COURSE_CYCLE)]
 
 
 def add_panel_lines(target_obj, direction='HORIZONTAL', count=3,

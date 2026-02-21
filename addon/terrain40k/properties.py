@@ -5,6 +5,7 @@ All user-configurable parameters for terrain generation.
 
 import bpy
 from bpy.props import (
+    BoolProperty,
     EnumProperty,
     FloatProperty,
     IntProperty,
@@ -52,7 +53,7 @@ class Terrain40KProperties(bpy.types.PropertyGroup):
     )
     wall_thickness: FloatProperty(
         name="Wall Thickness",
-        default=3.0,
+        default=5.0,
         min=1.6, max=10.0,
         step=10,
         precision=1,
@@ -63,6 +64,19 @@ class Terrain40KProperties(bpy.types.PropertyGroup):
         default=1,
         min=1, max=4,
         description="Number of floors / levels",
+    )
+    wall_style: bpy.props.EnumProperty(
+        name="Wall Style",
+        items=[
+            ('VONTRAGG', "Vontragg Cathedral",
+             "Fine stonework, very slender lancet arches (gothic_wall ref)"),
+            ('VOY',      "Grimdark Ruins",
+             "Medium blockwork, wide lancets, coarser masonry (VoyMakesMinis ref)"),
+            ('SIMPLE',   "Simple Modular",
+             "Coarse blocks, wider arches, plain profile (root set ref)"),
+        ],
+        default='VOY',
+        description="Reference style preset — sets window ratio, arch smoothness and block scale",
     )
     window_density: IntProperty(
         name="Window Count",
@@ -81,6 +95,14 @@ class Terrain40KProperties(bpy.types.PropertyGroup):
         default=1,
         min=0, max=3,
         description="0=plain, 1=basic arches, 2=buttresses+sills, 3=full gothic",
+    )
+    mortar_width: FloatProperty(
+        name="Mortar Width",
+        default=1.0,
+        min=0.0, max=3.0,
+        step=5,
+        precision=1,
+        description="Breite der Mauerwerk-Fugen in mm (0 = keine Fugen)",
     )
     damage_state: EnumProperty(
         name="Damage State",
@@ -145,11 +167,11 @@ class Terrain40KProperties(bpy.types.PropertyGroup):
     )
     magnet_diameter: FloatProperty(
         name="Magnet Diameter",
-        default=5.0,
-        min=3.0, max=10.0,
-        step=10,
+        default=3.0,
+        min=2.0, max=6.0,
+        step=5,
         precision=1,
-        description="Magnet diameter in mm (common: 5 or 6)",
+        description="Magnet diameter in mm (default: 3 mm small magnets)",
     )
     magnet_height: FloatProperty(
         name="Magnet Height",
@@ -158,6 +180,11 @@ class Terrain40KProperties(bpy.types.PropertyGroup):
         step=10,
         precision=1,
         description="Magnet height in mm (common: 2)",
+    )
+    auto_clear: BoolProperty(
+        name="Clear on Generate",
+        default=True,
+        description="Delete previously generated terrain objects before generating a new one",
     )
 
 

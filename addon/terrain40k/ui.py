@@ -33,9 +33,12 @@ class TERRAIN40K_PT_main_panel(bpy.types.Panel):
         # Style
         box = layout.box()
         box.label(text="Style", icon='SCULPTMODE_HLT')
+        box.prop(props, "wall_style")
+        box.separator()
         box.prop(props, "window_density")
         box.prop(props, "detail_level")
         box.prop(props, "gothic_style")
+        box.prop(props, "mortar_width", slider=True)
         box.prop(props, "damage_state")
         if props.damage_state != 'CLEAN':
             box.prop(props, "damage_intensity", slider=True)
@@ -64,7 +67,7 @@ class TERRAIN40K_PT_main_panel(bpy.types.Panel):
         box.prop(props, "split_mode")
 
         layout.separator()
-        # Generate button
+        layout.prop(props, "auto_clear")
         row = layout.row(align=True)
         row.scale_y = 2.0
         row.operator("terrain40k.generate", text="Generate Module", icon='MESH_CUBE')
